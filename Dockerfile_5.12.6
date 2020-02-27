@@ -1,0 +1,58 @@
+FROM ubuntu:16.04
+
+# --- scaffolding of the standard directories, we always work and go back in HOME aka root
+RUN cd /root && mkdir -p Projects/DeepGlance && mkdir -p Tmp/Builds
+
+# --- basic utilities, used by multiple section of the Dockerfile
+RUN apt-get update && apt-get install -y \
+    git curl wget chrpath libfuse2 && \
+    curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | bash && \
+    apt-get install -y git-lfs
+
+# --- install qt 5.12.6 -- (checked on Sep 18 2019, the latest 5.12)
+RUN apt-get update && apt-get install -y \
+    build-essential libgl1-mesa-dev software-properties-common && \
+    curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | bash
+RUN add-apt-repository --yes ppa:beineri/opt-qt-5.12.6-xenial
+RUN apt-get update && apt-get install -y \
+    qt512-meta-full qt512charts-no-lgpl
+ENV QTDIR "/opt/qt512"
+ENV PATH "/opt/qt512/bin:$PATH"
+ENV LD_LIBRARY_PATH "/opt/qt512/lib/x86_64-linux-gnu:/opt/qt512/lib:$LD_LIBRARY_PATH"
+ENV PKG_CONFIG_PATH "/opt/qt512/lib/pkgconfig:$PKG_CONFIG_PATH"
+
+# --- build and install the QtAutoUpdater
+RUN apt-get install -y software-properties-common && \
+    add-apt-repository --yes ppa:deadsnakes/ppa && \
+    apt-get update && \
+    apt-get install -y python3.7 && \
+    curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && python3.7 get-pip.py && \
+    pip3.7 install qdep && \
+    qdep prfgen --qmake "/opt/qt512/bin/qmake" && \
+    git clone https://github.com/Skycoder42/QtAutoUpdater.git /root/Tmp/Builds/QtAutoUpdater && \
+    cd /root/Tmp/Builds/QtAutoUpdater && \
+    git checkout 2.1.5-4 && \
+    qmake && make qmake_all && make && make install && \
+    cd /root && \
+    rm -rf /root/Tmp/Build/QtAutoUpdater && \
+    apt-get remove -y python3.7
+
+# --- build and install protobuf
+RUN apt-get install -y autoconf libtool && \
+    git clone https://github.com/protocolbuffers/protobuf.git /root/Tmp/Builds/protobuf && \
+    cd /root/Tmp/Builds/protobuf && \
+    git checkout v3.6.1 && \
+    git submodule update --init --recursive && \
+    ./autogen.sh && \
+    mkdir b1 && cd b1 && \
+    ../configure --prefix=/root/Projects/Prefix/protobuf/3.6.1/ubn16_x64 && \
+    make && \
+    make install && \
+    cd /root && rm -rf /root/Tmp/Builds/protobuf
+
+# --- install linux deploy qt
+RUN cd /opt/qt512/bin && \
+    wget -c -nv "https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage" && \
+    chmod +x /opt/qt512/bin/linuxdeployqt-continuous-x86_64.AppImage
+
+    
